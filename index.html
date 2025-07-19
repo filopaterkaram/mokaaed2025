@@ -5,10 +5,98 @@
     <title>مقاعد مسرح الواي (نيروز 2025)</title>
     <!-- Firebase App (الأساسية) -->
   <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js">
+firebase.database().ref("attendance").on("value", snapshot => {
+  const data = snapshot.val();
+  if (!data) return;
 
+  const list = document.getElementById("attendanceList");
+  if (list) {
+    list.innerHTML = "";
+    Object.keys(data).forEach(id => {
+      const entry = data[id];
+      const item = document.createElement("li");
+item.innerHTML = `${entry.name} - ${entry.time} <button class="delete-attendance" data-id="${id}" style="display:none">🗑️</button>`;
+list.appendChild(item);
+      list.appendChild(item);
+    });
+  }
+});
+
+firebase.database().ref("tickets").on("value", snapshot => {
+  const data = snapshot.val();
+  if (!data) return;
+
+  const table = document.getElementById("ticketTableBody");
+  if (table) {
+    table.innerHTML = "";
+    Object.keys(data).forEach(id => {
+      const ticket = data[id];
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${id}</td>
+        <td>${ticket.owner}</td>
+        <td>${ticket.seat}</td>
+        <td>${ticket.time}</td>
+      `;
+      table.appendChild(row);
+    });
+  }
+});
+
+
+firebase.auth().onAuthStateChanged(user => {
+  if (user) {
+    const safeEmail = user.email.replace(/\./g, '%2E');
+    firebase.database().ref("users/" + safeEmail).once("value").then(snapshot => {
+      const userData = snapshot.val();
+      const role = userData?.role || "guest";
+
+      // إظهار أزرار الحذف إذا admin
+      if (role === "admin") {
+        document.querySelectorAll(".delete-ticket").forEach(btn => btn.style.display = "inline-block");
+        document.querySelectorAll(".delete-attendance").forEach(btn => btn.style.display = "inline-block");
+      }
+    });
+  }
+});
+
+
+document.addEventListener("click", function(e) {
+  if (e.target.classList.contains("delete-ticket")) {
+    const id = e.target.dataset.id;
+    firebase.database().ref("tickets/" + id).remove();
+  }
+  if (e.target.classList.contains("delete-attendance")) {
+    const id = e.target.dataset.id;
+    firebase.database().ref("attendance/" + id).remove();
+  }
+});
+
+
+document.getElementById("addUserForm").addEventListener("submit", function(e) {
+  e.preventDefault();
+  const email = document.getElementById("newUserEmail").value.trim();
+  const password = document.getElementById("newUserPassword").value.trim();
+  const role = document.getElementById("newUserRole").value;
+
+  if (!email || !password) {
+    alert("يرجى إدخال البريد وكلمة السر");
+    return;
+  }
+
+  const emailKey = email.replace(/\./g, '%2E');
+  firebase.database().ref("pendingUsers/" + emailKey).set({
+    password,
+    role
+  }).then(() => {
+    alert("تم إرسال طلب الإضافة إلى الإدارة");
+    document.getElementById("addUserForm").reset();
+  });
+});
+
+</script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 
 
 
@@ -610,20 +698,6 @@
     };
     firebase.initializeApp(firebaseConfig);
     document.addEventListener('DOMContentLoaded', () => {
-        firebase.database().ref("chairs").once("value").then(snapshot => {
-  const allChairs = snapshot.val();
-  if (allChairs) {
-    Object.keys(allChairs).forEach(seatId => {
-      const data = allChairs[seatId];
-      const seatElement = document.getElementById(seatId);
-      if (data.status === "reserved" && seatElement) {
-        seatElement.classList.add("reserved");
-        seatElement.style.pointerEvents = "none"; // يمنع الحجز مرة أخرى
-      }
-    });
-  }
-});
-
         // ===================================
         // Animated Background Logic
         // ===================================
@@ -920,29 +994,7 @@
             document.getElementById('countB').textContent = `(${seatsData.B.length} كرسي)`;
             document.getElementById('countC').textContent = `(${seatsData.C.length} كرسي)`;
         }
-        // تحميل الكراسي من Firebase قبل عرض الجدول
-firebase.database().ref("chairs").once("value").then(snapshot => {
-  const data = snapshot.val();
-  if (!data) return;
-
-  // نفرّغ seatsData
-  seatsData = { A: [], B: [], C: [] };
-
-  // نوزّع الكراسي حسب القسم
-  Object.keys(data).forEach(seatId => {
-    const seat = data[seatId];
-    const section = seat.section || 'A'; // أو B أو C
-    seatsData[section].push({
-      number: seatId,
-      owner: seat.owner || '',
-      mobile: seat.mobile || ''
-    });
-  });
-
-  // عرض الجدول
-  renderSeatManageTable();
-});
-
+        
         function renderSeatManageTable() {
             let html = '<table class="seat-table">';
             html += '<tr><th>القسم</th><th>رقم الكرسي</th><th>الاسم</th><th>الموبايل</th><th>حذف</th></tr>';
@@ -971,26 +1023,7 @@ firebase.database().ref("chairs").once("value").then(snapshot => {
                         seat.mobile = '';
                         seat.bookedAt = '';
                         seat.leftAt = '';
-                      firebase.database().ref("chairs").once("value").then(snapshot => {
-  const data = snapshot.val();
-  if (!data) return;
-
-  seatsData = { A: [], B: [], C: [] };
-
-  Object.keys(data).forEach(seatId => {
-    const seat = data[seatId];
-    const section = seat.section || 'A';
-    seatsData[section].push({
-      number: seatId,
-      owner: seat.owner || '',
-      mobile: seat.mobile || ''
-    });
-  });
-
-  updateSeatCounts();
-  renderSeatManageTable();
-});
-
+                        renderSeatManageTable();
                     }
                 };
             });
@@ -1496,5 +1529,20 @@ firebase.database().ref("chairs").once("value").then(snapshot => {
         showPage(loginPage);
     });
     </script>
+
+<!-- إضافة مستخدم جديد -->
+<div id="userAddSection" style="display:none; padding:20px;">
+  <h3>إضافة مستخدم جديد</h3>
+  <form id="addUserForm">
+    <input type="email" id="newUserEmail" placeholder="البريد الإلكتروني" required><br>
+    <input type="password" id="newUserPassword" placeholder="كلمة المرور" required><br>
+    <select id="newUserRole">
+      <option value="coordinator">منسق</option>
+      <option value="admin">مدير</option>
+    </select><br><br>
+    <button type="submit">إرسال الطلب</button>
+  </form>
+</div>
+
 </body>
 </html>
